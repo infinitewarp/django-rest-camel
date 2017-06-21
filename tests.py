@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
+from collections import OrderedDict
 from unittest.case import TestCase
 
 # Bootstrap django before importing anything from rest_framework.
@@ -8,7 +8,7 @@ from django.conf import settings
 
 settings.configure()
 
-from rest_camel.util import camelize, underscorize
+from rest_camel.util import camelize, underscorize, ProtectedDict, preserve_dict_keys
 from rest_framework.utils.serializer_helpers import ReturnDict, ReturnList
 
 
@@ -105,6 +105,53 @@ class UnderscoreToCamelTestCase(TestCase):
         self.assertEqual(result, output)
         self.assertIs(result.serializer, output.serializer)
 
+    def test_protected_dict(self):
+        """
+        camelize() should not convert keys in instances of ProtectedDict, but should convert keys
+        of all nested dictionaries.
+        """
+        input = {
+            "an_int": 42,
+            "protected_dict": ProtectedDict([("title_display", 1), ("nested_dict", {
+                "test_field": 1, "any_field": 2
+            })]),
+            "the_str": "abc",
+        }
+        output = {
+            "anInt": 42,
+            "protectedDict": ProtectedDict([("title_display", 1), ("nested_dict", {
+                "testField": 1, "anyField": 2
+            })]),
+            "theStr": "abc",
+        }
+
+        result = camelize(input)
+        self.assertEqual(result, output)
+
+    def test_protected_attr(self):
+        """
+        camelize() should not convert keys in instances with `_preserve_keys` attribute set,
+         but should convert keys of all nested dictionaries.
+        """
+        input = {
+            "an_int": 42,
+            "protected_dict": OrderedDict([("title_display", 1), ("nested_dict", {
+                "test_field": 1, "any_field": 2
+            })]),
+            "the_str": "abc",
+        }
+        setattr(input['protected_dict'], '_preserve_keys', True)
+        output = {
+            "anInt": 42,
+            "protectedDict": OrderedDict([("title_display", 1), ("nested_dict", {
+                "testField": 1, "anyField": 2
+            })]),
+            "theStr": "abc",
+        }
+        result = camelize(input)
+        self.assertEqual(result, output)
+        self.assertTrue(getattr(result['protectedDict'], '_preserve_keys'))
+
 
 class CamelToUnderscoreTestCase(TestCase):
     def test_camel_to_under_dict(self):
@@ -191,6 +238,54 @@ class CamelToUnderscoreTestCase(TestCase):
         self.assertEqual(result, output)
         self.assertIs(result.serializer, output.serializer)
 
+    def test_protected_dict(self):
+        """
+        underscorize() should not convert keys in instances of ProtectedDict, but should convert keys
+        of all nested dictionaries.
+        """
+        input = {
+            "anInt": 42,
+            "protectedDict": ProtectedDict([("titleDisplay", 1), ("nestedDict", {
+                "testField": 1, "anyField": 2
+            })]),
+            "theStr": "abc",
+        }
+        output = {
+            "an_int": 42,
+            "protected_dict": ProtectedDict([("titleDisplay", 1), ("nestedDict", {
+                "test_field": 1, "any_field": 2
+            })]),
+            "the_str": "abc",
+        }
+
+        result = underscorize(input)
+        self.assertEqual(result, output)
+
+    def test_protected_attr(self):
+        """
+        underscorize() should not convert keys in instances of ProtectedDict, but should convert keys
+        of all nested dictionaries.
+        """
+        input = {
+            "anInt": 42,
+            "protectedDict": OrderedDict([("titleDisplay", 1), ("nestedDict", {
+                "testField": 1, "anyField": 2
+            })]),
+            "theStr": "abc",
+        }
+        setattr(input['protectedDict'], '_preserve_keys', True)
+        output = {
+            "an_int": 42,
+            "protected_dict": OrderedDict([("titleDisplay", 1), ("nestedDict", {
+                "test_field": 1, "any_field": 2
+            })]),
+            "the_str": "abc",
+        }
+
+        result = underscorize(input)
+        self.assertEqual(result, output)
+        self.assertTrue(getattr(result['protected_dict'], '_preserve_keys'))
+
 
 class CompatibilityTest(TestCase):
     def test_compatibility(self):
@@ -223,3 +318,31 @@ class CompatibilityTest(TestCase):
         self.assertIs(result.serializer, input.serializer)
         self.assertIs(result['a_list'].serializer, input['a_list'].serializer)
         self.assertIs(result['a_list'][2].serializer, input['a_list'][2].serializer)
+
+
+class PreserveDictKeysTest(TestCase):
+    def test_dict(self):
+        """
+        Tests that :func:`preserve_dict_keys` converts a :class:`dict` to :class:`ProtectedDict`.
+        """
+        input = {'a': 1, 'b': 2, 'c': 3}
+        output = ProtectedDict([('a', 1), ('b', 2), ('c', 3)])
+        result = preserve_dict_keys(input)
+        self.assertEqual(result, output)
+
+    def test_ordered_dict(self):
+        """
+        Tests that :func:`preserve_dict_keys` adds a :attr:`_preserve_keys` attribute to custom dictionary.
+        """
+        input = OrderedDict([('a', 1), ('b', 2), ('c', 3)])
+        result = preserve_dict_keys(input)
+        self.assertIs(result, input)
+        self.assertTrue(getattr(result, '_preserve_keys'))
+
+    def test_protected_dict(self):
+        """
+        Tests that :func:`preserve_dict_keys` returns the same instance if passed :class:`ProtectedDict`.
+        """
+        input = ProtectedDict([('a', 1), ('b', 2), ('c', 3)])
+        result = preserve_dict_keys(input)
+        self.assertIs(input, result)

@@ -3,6 +3,34 @@ from collections import OrderedDict
 from rest_framework.utils.serializer_helpers import ReturnDict, ReturnList
 
 
+class ProtectedDict(dict):
+    """
+    A dict variant for which keys will be preserved when passed
+    to :func:`camelize` or :func:`underscorize`, but keys of all nested
+    dictionaries will be still transformed.
+    """
+    pass
+
+
+def preserve_dict_keys(dictionary):
+    """
+    Utility function which sets preserve keys flag on the dictionary.
+    Either constructs a new :class:`ProtectedDict` (if the dictionary is built-in dict object),
+    or sets the `_preserve_keys` attribute and returns the original dictionary.
+
+    :param dictionary: Dictionary of which the keys should be protected.
+    :return: :class:`ProtectedDict` or the original dictionary with `_preserve_keys` attribute.
+    """
+    data_type = type(dictionary)
+    if data_type is dict:
+        return ProtectedDict(dictionary)
+    elif data_type is ProtectedDict:
+        return dictionary
+    else:
+        setattr(dictionary, '_preserve_keys', True)
+        return dictionary
+
+
 def camelize_key(key, uppercase_first_letter=True):
     """
     From: https://github.com/jpvanhal/inflection
@@ -58,14 +86,21 @@ def underscore_key(key):
 def camelize(data):
     data_type = type(data)
 
-    if data_type in (dict, OrderedDict, ReturnDict):
+    if data_type in (dict, OrderedDict, ReturnDict, ProtectedDict):
         kwargs = {}
         if data_type is ReturnDict:
             kwargs['serializer'] = data.serializer
         new_dict = data_type(**kwargs)
 
-        for k, v in data.items():
-            new_dict[camelize_key(k, False)] = camelize(v)
+        has_preserve_keys_attr = hasattr(data, '_preserve_keys')
+        if data_type is not ProtectedDict and not has_preserve_keys_attr:
+            for k, v in data.items():
+                new_dict[camelize_key(k, False)] = camelize(v)
+        else:
+            for k, v in data.items():
+                new_dict[k] = camelize(v)
+            if has_preserve_keys_attr:
+                setattr(new_dict, '_preserve_keys', getattr(data, '_preserve_keys'))
 
         return new_dict
 
@@ -81,13 +116,22 @@ def camelize(data):
 def underscorize(data):
     data_type = type(data)
 
-    if data_type in (dict, OrderedDict, ReturnDict):
+    if data_type in (dict, OrderedDict, ReturnDict, ProtectedDict):
         kwargs = {}
         if data_type is ReturnDict:
             kwargs['serializer'] = data.serializer
         new_dict = data_type(**kwargs)
-        for key, value in data.items():
-            new_dict[underscore_key(key)] = underscorize(value)
+
+        has_preserve_keys_attr = hasattr(data, '_preserve_keys')
+        if data_type is not ProtectedDict and not has_preserve_keys_attr:
+            for key, value in data.items():
+                new_dict[underscore_key(key)] = underscorize(value)
+        else:
+            for key, value in data.items():
+                new_dict[key] = underscorize(value)
+            if has_preserve_keys_attr:
+                setattr(new_dict, '_preserve_keys', getattr(data, '_preserve_keys'))
+
         return new_dict
 
     if data_type in (list, tuple, ReturnList):

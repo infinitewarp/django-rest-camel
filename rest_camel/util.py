@@ -55,31 +55,27 @@ def underscore_key(key):
 
 
 def camelize(data):
-    data_type = type(data)
-
-    if data_type in (dict, OrderedDict):
-        new_dict = data_type()
-        for k, v in data.items():
-            new_dict[camelize_key(k, False)] = camelize(v)
+    if isinstance(data, (dict, OrderedDict)):
+        new_dict = OrderedDict()
+        for key, value in data.items():
+            new_dict[camelize_key(key, False)] = camelize(value)
 
         return new_dict
 
-    if data_type in (list, tuple):
-        return data_type(camelize(x) for x in data)
+    if isinstance(data, (list, tuple)):
+        return type(data)([camelize(x) for x in data])
 
     return data
 
 
 def underscorize(data):
-    data_type = type(data)
-
-    if data_type in (data, dict):
-        new_dict = data_type()
+    if isinstance(data, dict):
+        new_dict = type(data)()
         for key, value in data.items():
             new_dict[underscore_key(key)] = underscorize(value)
         return new_dict
 
-    if data_type in (list, tuple):
+    if isinstance(data, (list, tuple)):
         return type(data)(underscorize(x) for x in data)
 
     return data
